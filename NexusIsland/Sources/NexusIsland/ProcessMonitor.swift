@@ -25,12 +25,13 @@ class ProcessMonitor {
 
         do {
             try proc.run()
-            proc.waitUntilExit()
         } catch {
             return agents
         }
 
+        // Read BEFORE waitUntilExit to avoid pipe buffer deadlock
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        proc.waitUntilExit()
         guard let output = String(data: data, encoding: .utf8) else { return agents }
 
         let patterns: [(keyword: String, name: String)] = [

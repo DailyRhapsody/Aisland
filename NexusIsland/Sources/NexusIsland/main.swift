@@ -8,11 +8,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var monitor: ProcessMonitor!
     var pollTimer: Timer?
     var clickMonitor: Any?
+    var tickCount = 0
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         monitor = ProcessMonitor()
         island = IslandWindowController()
-        island.show()
+        // Don't show immediately — wait until an agent is detected
 
         // Start polling for agents
         pollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
@@ -20,82 +21,75 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         pollTimer?.fire()
 
-        // Global click monitor: click outside → collapse
-        clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { [weak self] event in
-            self?.handleGlobalClick(event)
+        // Overlay click: toggle expand/collapse
+        island.overlay.onClick = { [weak self] in
+            self?.toggleExpand()
         }
 
-        // Local click monitor: click inside → toggle
-        NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { [weak self] event in
-            self?.handleLocalClick(event)
-            return event
+        // Global click: collapse when clicking outside
+        clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseUp) { [weak self] event in
+            guard let self = self, self.island.vm.expanded else { return }
+            DispatchQueue.main.async {
+                self.island.vm.expanded = false
+            }
         }
 
         print("\u{1B}[1;36m")
         print("  ╔════════════════════════════════════════╗")
-        print("  ║  Nexus Island running (Swift)          ║")
+        print("  ║  Aisland running                        ║")
         print("  ║  Ctrl+C to stop                        ║")
         print("  ╚════════════════════════════════════════╝")
         print("\u{1B}[0m")
     }
 
     func tick() {
-        let agents = monitor.detectAgents()
-        let vm = island.vm
+        tickCount += 1
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            guard let self = self else { return }
+            let agents = self.monitor.detectAgents()
+            // Only scan for model every 5 ticks (~10s) to avoid heavy filesystem IO
+            let model = (self.tickCount % 5 == 0) ? self.monitor.detectModel() : nil
 
-        if let agent = agents.first {
             DispatchQueue.main.async {
-                vm.agentName = agent.name
-                vm.cpuPercent = agent.cpu
-                vm.memoryMB = agent.memory
-                vm.pid = agent.pid
+                let vm = self.island.vm
 
-                if agent.cpu > 15 {
-                    vm.statusText = "THINKING..."
-                    vm.statusColor = .orange
+                if let agent = agents.first {
+                    vm.agentName = agent.name
+                    vm.cpuPercent = agent.cpu
+                    vm.memoryMB = agent.memory
+                    vm.pid = agent.pid
+
+                    if agent.cpu > 15 {
+                        vm.statusText = "THINKING..."
+                        vm.statusColor = .orange
+                    } else {
+                        vm.statusText = "READY"
+                        vm.statusColor = .green
+                    }
+
+                    if let model = model {
+                        vm.model = model
+                    }
+
+                    // Show island when agent is active
+                    if !self.island.isVisible {
+                        self.island.show()
+                    }
                 } else {
-                    vm.statusText = "READY"
-                    vm.statusColor = .green
+                    // Hide island when no agent is running
+                    if self.island.isVisible {
+                        self.island.hide()
+                    }
+                    vm.statusText = "SLEEPING"
+                    vm.statusColor = Color(white: 0.5)
+                    vm.agentName = "Claude Code"
                 }
-
-                // Try to detect model
-                if let model = self.monitor.detectModel() {
-                    vm.model = model
-                }
-            }
-        } else {
-            DispatchQueue.main.async {
-                vm.statusText = "SLEEPING"
-                vm.statusColor = Color(white: 0.5)
-                vm.agentName = "Claude Code"
             }
         }
     }
 
-    func handleGlobalClick(_ event: NSEvent) {
-        guard island.vm.expanded else { return }
-        let pt = NSEvent.mouseLocation
-        let f = island.panel.frame
-        let inside = f.contains(pt)
-        if !inside {
-            DispatchQueue.main.async {
-                self.island.vm.expanded = false
-                self.island.reposition(height: Layout.collapsedHeight)
-            }
-        }
-    }
-
-    func handleLocalClick(_ event: NSEvent) {
-        let pt = NSEvent.mouseLocation
-        let f = island.panel.frame
-        guard f.contains(pt) else { return }
-
-        DispatchQueue.main.async {
-            let vm = self.island.vm
-            vm.expanded.toggle()
-            let h = vm.expanded ? Layout.expandedHeight : Layout.collapsedHeight
-            self.island.reposition(height: h)
-        }
+    func toggleExpand() {
+        island.vm.expanded.toggle()
     }
 }
 

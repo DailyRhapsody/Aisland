@@ -1,27 +1,48 @@
 import SwiftUI
 
+// MARK: - Spring animation matching Apple Dynamic Island
+
+private let islandSpring = Animation.spring(response: 0.4, dampingFraction: 0.75, blendDuration: 0)
+
 // MARK: - Main Island Content View
 
 struct IslandContentView: View {
     @ObservedObject var viewModel: IslandViewModel
 
-    var body: some View {
-        ZStack {
-            // Background: sharp top, rounded bottom
-            PillShape(cornerRadius: Layout.cornerRadius)
-                .fill(Color.black)
+    private var currentHeight: CGFloat {
+        viewModel.expanded ? Layout.expandedHeight : Layout.collapsedHeight
+    }
 
-            // Content
-            if viewModel.expanded {
-                ExpandedView(viewModel: viewModel)
-            } else {
-                CollapsedView(viewModel: viewModel)
+    private var currentRadius: CGFloat {
+        viewModel.expanded ? Layout.expandedRadius : Layout.collapsedRadius
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // The pill — pinned to top of the fixed-size window
+            ZStack(alignment: .top) {
+                // Background pill
+                RoundedRectangle(cornerRadius: currentRadius, style: .continuous)
+                    .fill(Color.black)
+                    .shadow(color: .black.opacity(0.5), radius: 10, y: 5)
+
+                // Content
+                if viewModel.expanded {
+                    ExpandedView(viewModel: viewModel)
+                        .transition(.opacity)
+                } else {
+                    CollapsedView(viewModel: viewModel)
+                        .transition(.opacity)
+                }
             }
+            .frame(width: Layout.pillWidth, height: currentHeight)
+            .clipShape(RoundedRectangle(cornerRadius: currentRadius, style: .continuous))
+            .animation(islandSpring, value: viewModel.expanded)
+
+            Spacer(minLength: 0)
         }
-        .frame(
-            width: Layout.pillWidth,
-            height: viewModel.expanded ? Layout.expandedHeight : Layout.collapsedHeight
-        )
+        .frame(width: Layout.pillWidth, height: Layout.expandedHeight, alignment: .top)
+        .allowsHitTesting(false)
     }
 }
 
@@ -32,7 +53,6 @@ struct CollapsedView: View {
 
     var body: some View {
         HStack {
-            // Left: avatar placeholder + name
             HStack(spacing: 4) {
                 Text("🤖")
                     .font(.system(size: 10))
@@ -44,7 +64,6 @@ struct CollapsedView: View {
 
             Spacer()
 
-            // Right: status dot + label
             HStack(spacing: 5) {
                 Circle()
                     .fill(viewModel.statusColor)
@@ -68,7 +87,7 @@ struct ExpandedView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Top bar (same as collapsed)
+            // Top bar
             HStack {
                 HStack(spacing: 4) {
                     Text("🤖")

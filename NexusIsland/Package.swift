@@ -2,11 +2,11 @@
 import PackageDescription
 
 let package = Package(
-    name: "NexusIsland",
+    name: "Aisland",
     platforms: [.macOS(.v13)],
     targets: [
         .executableTarget(
-            name: "NexusIsland",
+            name: "Aisland",
             path: "Sources/NexusIsland",
             linkerSettings: [
                 .unsafeFlags(["-framework", "AppKit"]),
