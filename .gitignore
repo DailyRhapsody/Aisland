@@ -1,0 +1,14 @@
+# Python
+__pycache__/
+*.pyc
+.aisland.pid
+
+# Swift
+NexusIsland/.build/
+NexusIsland/.swiftpm/
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
